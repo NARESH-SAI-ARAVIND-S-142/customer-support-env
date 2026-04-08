@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "customer-support-env"
+version = "1.0.0"
+description = "OpenEnv-compliant Customer Support Ticket Resolver Environment"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "NareshSaiAravind", email = "naresh@example.com" }
+]
+keywords = ["openenv", "reinforcement-learning", "customer-support", "nlp"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "pydantic>=2.0.0,<3.0.0",
+  "openai>=1.14.0",
+  "fastapi>=0.110.0",
+  "uvicorn[standard]>=0.29.0",
+  "httpx>=0.27.0",
+  "python-multipart>=0.0.9",
+  "PyYAML>=6.0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.urls]
+"Homepage" = "https://huggingface.co/spaces/NareshSaiAravind/customer_support_env"
+"Repository" = "https://github.com/NARESH-SAI-ARAVIND-S-142/customer-support-env"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]
+exclude = ["tests*", "__pycache__*"]
+
+[tool.openenv]
+name = "customer-support-ticket-resolver"
+version = "1.0.0"
+env_module = "env"
+env_class = "CustomerSupportEnv"
+factory = "make_env"
+server = "server:app"
+inference = "inference.py"
+config = "openenv.yaml"
