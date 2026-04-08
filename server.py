@@ -9,6 +9,7 @@ Endpoints
   POST /step          – take one action, returns (obs, reward, done, info)
   GET  /state         – return internal state snapshot
   GET  /health        – liveness probe
+  GET  /              – root info page
 
 Hugging Face Spaces entry point:
   uvicorn server:app --host 0.0.0.0 --port 7860
@@ -19,8 +20,9 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from env import Action, CustomerSupportEnv, Observation, Reward
@@ -45,13 +47,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# One environment instance per server process (suitable for single-user Spaces)
+# One environment instance per server process
 _env: Optional[CustomerSupportEnv] = None
 
 
 def _get_env() -> CustomerSupportEnv:
+    global _env
     if _env is None:
-        raise HTTPException(status_code=400, detail="Environment not initialized. Call /reset first.")
+        # Auto-initialise with defaults if not yet reset
+        _env = CustomerSupportEnv(task_id=1, seed=42)
+        _env.reset()
     return _env
 
 
@@ -81,39 +86,79 @@ class StepResponse(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+@app.get("/")
+def root() -> Dict[str, Any]:
+    """Root endpoint — basic info."""
+    return {
+        "name": "Customer Support Ticket Resolver",
+        "version": "1.0.0",
+        "endpoints": ["/reset", "/step", "/state", "/health", "/docs"],
+        "status": "running",
+    }
+
+
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok", "service": "customer-support-env"}
 
 
-@app.post("/reset", response_model=Dict[str, Any])
-def reset(req: ResetRequest) -> Dict[str, Any]:
-    """Initialise (or re-initialise) the environment and return the first observation."""
+@app.post("/reset")
+async def reset(request: Request) -> Dict[str, Any]:
+    """
+    Initialise (or re-initialise) the environment and return the first observation.
+    Accepts optional JSON body: {"task_id": 1, "seed": 42}
+    Works with empty body too.
+    """
     global _env
-    _env = CustomerSupportEnv(task_id=req.task_id, seed=req.seed)
+
+    # Safely parse body — works with empty body, missing fields, or full body
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    task_id = int(body.get("task_id", 1)) if isinstance(body, dict) else 1
+    seed = int(body.get("seed", 42)) if isinstance(body, dict) else 42
+
+    # Clamp task_id to valid range
+    if task_id not in (1, 2, 3):
+        task_id = 1
+
+    _env = CustomerSupportEnv(task_id=task_id, seed=seed)
     obs: Observation = _env.reset()
     return obs.model_dump()
 
 
-@app.post("/step", response_model=StepResponse)
-def step(req: StepRequest) -> StepResponse:
+@app.post("/step")
+async def step(request: Request) -> Dict[str, Any]:
     """Submit one action and receive the next observation, reward, done flag and info."""
     env = _get_env()
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    if not isinstance(body, dict):
+        body = {}
+
     action = Action(
-        classification=req.classification,
-        response=req.response,
-        resolution_action=req.resolution_action,
+        classification=str(body.get("classification", "")),
+        response=str(body.get("response", "")),
+        resolution_action=str(body.get("resolution_action", "")),
     )
+
     obs, reward, done, info = env.step(action)
-    return StepResponse(
-        observation=obs.model_dump(),
-        reward=reward.model_dump(),
-        done=done,
-        info=info,
-    )
+
+    return {
+        "observation": obs.model_dump(),
+        "reward": reward.model_dump(),
+        "done": done,
+        "info": info,
+    }
 
 
-@app.get("/state", response_model=Dict[str, Any])
+@app.get("/state")
 def state() -> Dict[str, Any]:
     """Return a full internal state snapshot for debugging."""
     return _get_env().state()
