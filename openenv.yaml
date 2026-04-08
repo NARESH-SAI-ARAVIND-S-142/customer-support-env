@@ -1,0 +1,174 @@
+environment:
+  name: customer-support-ticket-resolver
+  version: "1.0.0"
+  description: >
+    An OpenEnv-compliant environment that simulates how human customer support
+    agents process and resolve incoming support tickets. The agent must
+    classify tickets, write professional responses, and propose concrete
+    resolution actions across three increasing difficulty levels.
+
+  author: OpenEnv Hackathon
+  tags:
+    - customer-support
+    - nlp
+    - classification
+    - response-generation
+    - reward-shaping
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tasks
+# ─────────────────────────────────────────────────────────────────────────────
+tasks:
+  - id: 1
+    name: ticket_classification
+    difficulty: easy
+    description: >
+      Given a customer support ticket, classify it into exactly one of four
+      categories: delivery, billing, damaged_product, account_access.
+    input: ticket_text
+    output: classification
+    max_steps: 5
+    scoring:
+      classification: 1.0
+      response: 0.0
+      resolution: 0.0
+
+  - id: 2
+    name: classify_and_respond
+    difficulty: medium
+    description: >
+      Classify the ticket AND write a professional, empathetic customer-facing
+      response that acknowledges the issue and outlines next steps.
+    input: ticket_text
+    output: classification + response
+    max_steps: 5
+    scoring:
+      classification: 0.40
+      response: 0.60
+      resolution: 0.00
+
+  - id: 3
+    name: full_resolution
+    difficulty: hard
+    description: >
+      Classify the ticket, write a professional response, AND specify the
+      concrete resolution action to be taken (e.g. refund, resend, account_unlock).
+    input: ticket_text
+    output: classification + response + resolution_action
+    max_steps: 5
+    scoring:
+      classification: 0.30
+      response: 0.30
+      resolution: 0.40
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Action space
+# ─────────────────────────────────────────────────────────────────────────────
+action_space:
+  type: structured_text
+  fields:
+    classification:
+      type: string
+      enum:
+        - delivery
+        - billing
+        - damaged_product
+        - account_access
+      description: Category label for the ticket
+    response:
+      type: string
+      description: Professional reply written to the customer
+    resolution_action:
+      type: string
+      enum:
+        - refund
+        - resend
+        - escalate
+        - reset_password
+        - account_unlock
+        - discount_applied
+        - schedule_pickup
+        - investigation_opened
+      description: Concrete back-office action to resolve the issue
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Observation space
+# ─────────────────────────────────────────────────────────────────────────────
+observation_space:
+  type: structured_text
+  fields:
+    ticket_text:
+      type: string
+      description: Full body of the customer support ticket
+    priority:
+      type: string
+      enum: [low, medium, high, critical]
+    customer_type:
+      type: string
+      enum: [standard, premium, enterprise]
+    task_id:
+      type: integer
+      enum: [1, 2, 3]
+    task_description:
+      type: string
+      description: Human-readable task instructions shown to the agent
+    step:
+      type: integer
+      description: Current step index within the episode
+    max_steps:
+      type: integer
+      description: Maximum steps per episode (default 5)
+    previous_actions:
+      type: array
+      description: List of action dicts submitted so far in this episode
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reward
+# ─────────────────────────────────────────────────────────────────────────────
+reward:
+  type: float
+  range: [0.0, 1.0]
+  incremental: true
+  components:
+    - name: classification_score
+      weight_task1: 1.00
+      weight_task2: 0.40
+      weight_task3: 0.30
+    - name: response_score
+      weight_task1: 0.00
+      weight_task2: 0.60
+      weight_task3: 0.30
+    - name: resolution_score
+      weight_task1: 0.00
+      weight_task2: 0.00
+      weight_task3: 0.40
+  penalties:
+    - name: repeat_action
+      amount: -0.10
+      description: Penalise exact duplicate (classification, resolution_action) pairs
+    - name: invalid_category
+      amount: -0.05
+    - name: invalid_resolution
+      amount: -0.05
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Runtime
+# ─────────────────────────────────────────────────────────────────────────────
+runtime:
+  max_steps: 5
+  deterministic: true
+  seed: 42
+  resources:
+    max_vcpu: 2
+    max_ram_gb: 8
+    max_runtime_minutes: 20
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry points
+# ─────────────────────────────────────────────────────────────────────────────
+entrypoints:
+  env_module: env
+  env_class: CustomerSupportEnv
+  factory: make_env
+  server: server:app
+  inference: inference.py
