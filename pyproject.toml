@@ -7,7 +7,7 @@ name = "customer-support-env"
 version = "1.0.0"
 description = "OpenEnv-compliant Customer Support Ticket Resolver Environment"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
   { name = "NareshSaiAravind", email = "naresh@example.com" }
@@ -19,6 +19,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 dependencies = [
+  "openenv-core>=0.2.0",
   "pydantic>=2.0.0,<3.0.0",
   "openai>=1.14.0",
   "fastapi>=0.110.0",
@@ -30,6 +31,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+serve = "server.app:main"
 
 [project.urls]
 "Homepage" = "https://huggingface.co/spaces/NareshSaiAravind/customer_support_env"
@@ -46,6 +50,6 @@ version = "1.0.0"
 env_module = "env"
 env_class = "CustomerSupportEnv"
 factory = "make_env"
-server = "server:app"
+server = "server.app:app"
 inference = "inference.py"
 config = "openenv.yaml"
